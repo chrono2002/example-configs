@@ -1,0 +1,106 @@
+#
+# Add this to ansible.cfg for speed purproses:
+#
+# pipelining = True
+# control_path = /tmp/ansible-ssh-%%h-%%p-%%r
+#
+
+- hosts: docker
+  vars:
+    docker_machine_url: https://github.com/docker/machine/releases/download/v0.16.1
+    docker_machine_completion_url: https://raw.githubusercontent.com/docker/machine/v0.16.1
+    docker_compose_url: https://github.com/docker/compose/releases/download/1.23.2
+  user: root
+  tasks:
+    - name: Update repositories cache and update/upgrade all packages to the latest version
+      apt:
+        upgrade: dist
+        update_cache: yes
+
+    - name: Install docker prerequisites
+      apt:
+        name: "{{ packages }}"
+      vars:
+        packages:
+        - apt-transport-https
+        - ca-certificates
+        - curl
+        - software-properties-common
+
+    - name: Add an Apt signing key
+      apt_key:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        state: present    
+
+#    - name: Define lsb_release -cs
+#      shell: lsb_release -cs
+#      ignore_errors: True
+#      register: lsb_release
+
+#    - name: Set up the stable repository
+#      shell: add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ lsb_release.stdout }} stable"
+
+    - apt_repository:
+        repo: "deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ansible_distribution_release}} stable"
+        state: present
+
+    - name: Install docker-ce
+      apt: name=docker-ce state=present update_cache=yes
+#      notify:
+#        - restart docker
+
+    - name: Start service dockerd, if not started
+      service:
+        name: docker
+        state: started
+        enabled: yes
+
+    - name: Check docker installation
+      shell: docker container run hello-world
+
+    - name: docker-machine
+      get_url:
+        url: "{{docker_machine_url}}/docker-machine-{{ansible_system}}-{{ansible_architecture}}"
+        dest: /usr/local/bin/docker-machine
+        mode: 0755
+
+    - name: docker-machine bash-completion
+      get_url:
+        url: "{{docker_machine_completion_url}}/contrib/completion/bash/{{item}}"
+        dest: /etc/bash_completion.d
+      with_items:
+        - docker-machine-prompt.bash
+        - docker-machine-wrapper.bash
+        - docker-machine.bash
+
+    - name: docker-compose
+      get_url:
+        url: "{{docker_compose_url}}/docker-compose-{{ansible_system}}-{{ansible_architecture}}"
+        dest: /usr/local/bin/docker-compose
+
+- hosts: swarm-server
+  tasks:
+    - name: swarm-init
+      shell: docker swarm ca || docker swarm init --advertise-addr {{ansible_default_ipv4.address}}
+
+    - name: get manager join token
+      shell: docker swarm join-token manager -q
+      ignore_errors: True
+      register: swarm_token
+
+    - name: "Add Swarm Token and Hash to dummy host"
+      add_host:
+        name: "SWARM_TOKEN_HOLDER"
+        token:  "{{ swarm_token.stdout }}"
+
+- hosts: docker[1:]
+  tasks:
+    - name: join swarm cluster
+      shell: docker swarm ca || docker swarm join --token {{ hostvars['SWARM_TOKEN_HOLDER']['token'] }} {{ hostvars['swarm-server'].ansible_host }}:2377
+
+
+#  tasks:
+#    - name: Init a new swarm with default parameters
+#      docker_swarm:
+#        state: present
+ 

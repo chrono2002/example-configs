@@ -1,0 +1,71 @@
+version: '2'
+
+# Assignment: Writing a Compose File
+
+# > Goal: Create a compose config for a local Drupal CMS website
+
+# - This empty directory is where you should create a docker-compose.yml 
+# - Use the `drupal` image along with the `postgres` image
+# - Set the version to 2
+# - Use `ports` to expose Drupal on 8080
+# - Be sure to setup POSTGRES_PASSWORD on postgres image
+# - Walk though Drupal config in browser at http://localhost:8080
+# - Tip: Drupal assumes DB is localhost, but it will actually be on the compose service name you give it
+# - Use Docker Hub documentation to figure out the right environment and volume settings
+# - Extra Credit: Use volumes to store Drupal unique data
+
+services:
+
+    drupal-fpm:
+        image: custom-drupal
+        build: .
+#        ports:
+#          - '9000:9000'
+#        image: drupal:latest
+#        ports:
+#          - '8080:80'
+        networks:
+          - drupal-net
+#	links:
+#	  - postgres-drupal
+        volumes:
+          - drupal-www:/var/www/html
+#          - drupal-modules:/var/www/html/modules
+#          - drupal-profiles:/var/www/html/profiles
+#          - drupal-sites:/var/www/html/sites
+#          - drupal-themes:/var/www/html/themes
+        restart: always
+
+    drupal-nginx:
+        image: wodby/drupal-nginx
+        ports:
+          - '8080:80'
+        networks:
+          - drupal-net
+        environment:
+            NGINX_BACKEND_HOST: drupal-fpm
+        volumes:
+          - drupal-www:/var/www/html
+        depends_on:
+          - drupal-fpm
+
+    postgres-drupal:
+        image: postgres:9-alpine
+        environment:
+            POSTGRES_PASSWORD: idxdhnu
+        networks:
+          - drupal-net
+        volumes:
+          - pg-drupal:/var/lib/postgresql/data
+        restart: always
+
+networks:
+  drupal-net:
+
+volumes:
+#  drupal-modules:
+#  drupal-profiles:
+#  drupal-sites:
+#  drupal-themes:
+  drupal-www:
+  pg-drupal:

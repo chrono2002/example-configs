@@ -1,0 +1,25 @@
+# kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/master/deploy/mandatory.yaml
+# minikube addons enable ingress
+
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  name: haproxy
+  annotations:
+    defaultBackend.enabled: "off"
+    controller.stats.enabled: "true"
+    ingress.kubernetes.io/ssl-redirect: "false"
+    ingress.kubernetes.io/rewrite-target: /
+spec:
+  rules:
+    - http:
+        paths:
+          - path: /
+            backend:
+              serviceName: client
+              servicePort: 3000
+          - path: /api/
+            backend:
+              serviceName: server
+              servicePort: 5000
+

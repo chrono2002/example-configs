@@ -1,0 +1,57 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  labels:
+    run: server
+  name: server
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      run: server
+  template:
+    metadata:
+      labels:
+        run: server
+    spec:
+      containers:
+        - name: server
+          image: stephengrider/multi-server
+          ports: 
+            - containerPort: 5000
+          env:
+            - name: REDIS_HOST
+              value: redis
+            - name: REDIS_PORT
+              value: '6379'
+            - name: PGUSER
+              value: postgres
+            - name: PGHOST
+              value: postgres
+            - name: PGPORT
+              value: '5432'
+            - name: PGDATABASE
+              value: postgres
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: pgpassword
+                  key: PGPASSWORD
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    run: server
+  name: server
+  namespace: default
+spec:
+  ports:
+    - name: port-1
+      port: 5000
+      protocol: TCP
+      targetPort: 5000
+  selector:
+    run: server

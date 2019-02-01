@@ -1,0 +1,74 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+Vagrant.configure("2") do |config|
+  # For a complete reference, please see the online documentation at
+  # https://docs.vagrantup.com.
+
+  # config.vm.network "forwarded_port", guest: 80, host: 8080, host_ip: "127.0.0.1"
+
+  config.vm.network "public_network", dev: "br0", use_dhcp_assigned_default_route: true
+
+  # config.vm.synced_folder "../data", "/vagrant_data"
+
+  config.vm.provider :libvirt do |libvirt|
+    libvirt.default_prefix = 'docker'
+    libvirt.storage_pool_name = 'images'
+    libvirt.storage :file, :size => '30G', :type => 'qcow2'
+    libvirt.memory = 2048
+    libvirt.volume_cache = 'writeback'
+    libvirt.autostart = true
+#    libvirt.mgmt_attach = false
+  end
+
+  config.vm.define "server" do |server|
+    ip = "172.20.0.231"
+    mac = "525400dc0312"
+
+    server.vm.box = "generic/ubuntu1804"
+    server.vm.network "public_network",
+        :dev => "br0", 
+        :mac => "#{mac}",
+        :ip => "#{ip}",
+        :use_dhcp_assigned_default_route => true
+
+#    server.vm.network "public_network",
+#        :bridge => "enp2s0",
+#        :adapter => 1,
+#        :mode => "bridge",
+#        :type => "bridge",
+#        :dev => "br0"
+#        :mode => "bridge",
+#        :type => "bridge",
+#        :ip => "#{ip}"
+    server.vm.provision "shell", run: "always", inline: "/usr/bin/hostnamectl set-hostname server.docker"
+#    server.vm.provision "shell", run: "always", inline: "echo #{ip} >> /etc/hosts"
+  end
+
+  config.vm.define "node1" do |node1|
+#    ip = "172.20.0.232"
+    node1.vm.box = "generic/ubuntu1804"
+#    node1.vm.network "public_network",
+#        :dev => "br0"
+#        :adapter => 1,
+#        :mode => "bridge",
+#        :type => "bridge",
+#        :ip => "#{ip}"
+    node1.vm.provision "shell", run: "always", inline: "/usr/bin/hostnamectl set-hostname node1.docker"
+#    node1.vm.provision "shell", run: "always", inline: "echo #{ip} >> /etc/hosts"
+  end
+
+#  config.vm.provision "shell", run: "always", inline: "/sbin/dhclient -r eth1; /sbin/route del default; /sbin/dhclient eth1"
+
+  config.vm.provision "shell" do |s|
+    my_pub_key = File.readlines("id_rsa.pub").first.strip
+    server_pub_key = File.readlines("/root/.ssh/id_rsa.pub").first.strip
+    s.inline = <<-SHELL
+      echo #{my_pub_key} >> /home/vagrant/.ssh/authorized_keys
+      echo #{server_pub_key} >> /home/vagrant/.ssh/authorized_keys
+      ip addr show eth1 | grep "inet\b" | awk '{print $2}' | cut -d/ -f1 >> /etc/hosts
+      apt-get -y -q install python
+      route del default gw 192.168.121.1
+    SHELL
+  end
+end
